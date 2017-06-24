@@ -14,7 +14,13 @@
 
 #include <glib.h>
 
+#include <RF24/RF24.h>
+
 #define ESE_UNIX_SOCKET	"ESEmbarcados"
+// Radio pipe addresses for the 2 nodes to communicate.
+const uint8_t pipes[][6] = {"1Node","2Node"};
+
+using namespace std;
 
 static GMainLoop *main_loop;
 static GOptionEntry options[] = {
@@ -90,6 +96,47 @@ void manager_stop(void)
 	printf("%s\n", "Exiting");
 }
 
+void radio_listen(int sock) {
+	RF24 radio(22,0);
+
+	// Setup and configure rf radio
+	radio.begin();
+
+	// optionally, increase the delay between retries & # of retries
+	radio.setRetries(15,15);
+	// Dump the configuration of the rf unit for debugging
+	radio.printDetails();
+
+	radio.openWritingPipe(pipes[1]);
+	radio.openReadingPipe(1,pipes[0]);
+
+	radio.startListening();
+
+	while (1) {
+		/* if there is data ready */
+		if ( radio.available() ) {
+		/* Dump the payloads until we've gotten everything */
+			char buffer[128];
+
+			/* Fetch the payload, and see if this was the last one.*/
+			while(radio.available())
+				radio.read(buffer, sizeof(buffer) );
+
+			radio.stopListening();
+
+			radio.write( buffer, sizeof(buffer) );
+
+			unix_send(sock, buffer, sizeof(buffer));
+			/* Now, resume listening so we catch the next packets. */
+			radio.startListening();
+			printf("Got payload(%d) %s...\n",strlen(buffer), buffer);
+			/* Delay after payload responded to, minimize RPi CPU time */
+			delay(900);
+		}
+
+	}
+}
+
 int manager_start(void)
 {
 	GIOCondition cond = (GIOCondition) (G_IO_IN | G_IO_ERR 
@@ -114,7 +161,7 @@ int manager_start(void)
 							NULL, watch_io_destroy);
 	g_io_channel_unref(io);
 
-	/* TODO: Init radio */
+	radio_listen(sock);
 
 	return 0;
 }
