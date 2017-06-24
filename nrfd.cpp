@@ -14,6 +14,8 @@
 
 #include <glib.h>
 
+#define ESE_UNIX_SOCKET	"ESEmbarcados"
+
 static GMainLoop *main_loop;
 static GOptionEntry options[] = {
 	{ NULL }
@@ -24,6 +26,39 @@ static void sig_term(int sig)
 	g_main_loop_quit(main_loop);
 }
 
+static int unix_connect(void)
+{
+	int sock;
+	struct sockaddr saddr = {AF_UNIX, ESE_UNIX_SOCKET};
+	socklen_t saddrlen = sizeof(struct sockaddr) + strlen(ESE_UNIX_SOCKET);
+
+	sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sock < 0)
+		return -errno;
+
+	if (connect(sock, &saddr, saddrlen) == -1) {
+		close(sock);
+		return -errno;
+	}
+
+	return sock;
+}
+
+static ssize_t unix_recv(int sockfd, void *buffer, size_t len)
+{
+	return recv(sockfd, buffer, len, 0);
+}
+
+static ssize_t unix_send(int sockfd, const void *buffer, size_t len)
+{
+	return send(sockfd, buffer, len, 0);
+}
+
+static void watch_io_destroy(gpointer user_data)
+{
+	/* TODO: Cleanup */
+}
+
 void manager_stop(void)
 {
 	/* TODO: cleanup */
@@ -32,7 +67,15 @@ void manager_stop(void)
 
 int manager_start(void)
 {
-	printf("%s\n", "Starting manager");
+	int sock, err;
+
+	sock = unix_connect();
+	if (sock < 0) {
+		printf("connect(): %s(%d)\n", strerror(-err), -err);
+		return -err;
+	}
+
+	/* TODO: Init radio */
 
 	return 0;
 }
