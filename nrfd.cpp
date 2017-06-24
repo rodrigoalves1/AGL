@@ -59,6 +59,31 @@ static void watch_io_destroy(gpointer user_data)
 	/* TODO: Cleanup */
 }
 
+static gboolean watch_io_read(GIOChannel *io, GIOCondition cond,
+							gpointer user_data)
+{
+	GError *gerr = NULL;
+	GIOStatus status;
+	char buffer[128];
+	size_t rx;
+
+	if (cond & (G_IO_ERR | G_IO_HUP | G_IO_NVAL))
+		return FALSE;
+
+	/* Reading data from audio manager */
+	status = g_io_channel_read_chars(io, buffer, sizeof(buffer),
+								&rx, &gerr);
+	if (status != G_IO_STATUS_NORMAL) {
+		printf("glib read(): %s\n", gerr->message);
+		g_error_free(gerr);
+		return FALSE;
+	}
+
+	printf("%s\n", buffer);
+
+	return TRUE;
+}
+
 void manager_stop(void)
 {
 	/* TODO: cleanup */
@@ -67,6 +92,9 @@ void manager_stop(void)
 
 int manager_start(void)
 {
+	GIOCondition cond = (GIOCondition) (G_IO_IN | G_IO_ERR 
+						|  G_IO_HUP |  G_IO_NVAL);
+	GIOChannel *io;
 	int sock, err;
 
 	sock = unix_connect();
@@ -74,6 +102,17 @@ int manager_start(void)
 		printf("connect(): %s(%d)\n", strerror(-err), -err);
 		return -err;
 	}
+
+	/* Watch audio manager socket */
+	io = g_io_channel_unix_new(sock);
+	g_io_channel_set_flags(io, G_IO_FLAG_NONBLOCK, NULL);
+	g_io_channel_set_close_on_unref(io, TRUE);
+	g_io_channel_set_encoding(io, NULL, NULL);
+	g_io_channel_set_buffered(io, FALSE);
+
+	g_io_add_watch_full(io, G_PRIORITY_DEFAULT, cond, watch_io_read,
+							NULL, watch_io_destroy);
+	g_io_channel_unref(io);
 
 	/* TODO: Init radio */
 
