@@ -20,8 +20,11 @@ sock.bind(server_address)
 
 # Listen for incoming connections
 sock.listen(1)
-
-while True:
+e1 = []
+e2 = []
+i = 0
+count = 0
+while count < 1200:
     # Wait for a connection
     print  'waiting for a connection'
     connection, client_address = sock.accept()
@@ -31,14 +34,29 @@ while True:
         # Receive the data in small chunks and retransmit it
         while True:
             data = connection.recv(16)
-            print 'received "%s"' % data
-            if data:
-                print 'sending data back to the client'
-                connection.sendall(data)
-            else:
-                print 'no more data from', client_address
-                break
-
+            #print float(data)
+            #print repr(data)
+            try:
+                data = float(data.replace("\x00",""))
+                print data
+                if data:
+                    if i == 0:
+                        e1.append(data)
+                        i = i + 1
+                    else:
+                        e2.append(data)
+                        i = 0
+                    print 'sending data back to the client'
+                    connection.sendall("ack")
+                    count = count + 1
+                else:
+                    print 'no more data from', client_address
+                    break
+            except:
+                pass
     finally:
         # Clean up the connection
         connection.close()
+
+d = {'e1': e1, 'e2': e2}
+dataFrame = DataFrame(data=d, index=index)
